@@ -1,14 +1,19 @@
+import re
 import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
-from app.config import (
+from ..config import (
     ALLOWED_CONTENT_TYPES,
     ALLOWED_EXTENSIONS,
     MAX_UPLOAD_BYTES,
+    OUTPUT_DIR,
+    THUMBNAIL_WIDTH,
     UPLOAD_DIR,
 )
+from app.services.thumbnails import ThumbnailError, generate_thumbnail
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
@@ -33,4 +38,22 @@ async def upload_video(file: UploadFile = File(...)):
                 raise HTTPException(status_code=413, detail="Archivo demasiado grande")
             out.write(chunk)
 
-    return {"id": file_id, "filename": file.filename, "size_bytes": size}
+    return {"id": file_id, "filename": file.filename, "size_bytes": size}   
+
+@router.post("/{file_id}/thumbnail")
+def create_thumbnail(file_id: str):
+    # El id viene de la URL: validarlo evita rutas maliciosas tipo ../../
+    if not re.fullmatch(r"[0-9a-f]{32}", file_id):
+        raise HTTPException(status_code=400, detail="Identificador no válido")
+
+    matches = list(UPLOAD_DIR.glob(f"{file_id}.*"))
+    if not matches:
+        raise HTTPException(status_code=404, detail="Vídeo no encontrado")
+
+    output = OUTPUT_DIR / f"{file_id}.jpg"
+    try:
+        generate_thumbnail(matches[0], output, THUMBNAIL_WIDTH)
+    except ThumbnailError:
+        raise HTTPException(status_code=500, detail="No se pudo generar la miniatura")
+
+    return FileResponse(output, media_type="image/jpeg")

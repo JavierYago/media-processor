@@ -1,10 +1,4 @@
-from fastapi.testclient import TestClient
-from app.main import app
-
-client = TestClient(app)
-
-
-def test_upload_rejects_non_video():
+def test_upload_rejects_non_video(client):
     response = client.post(
         "/uploads",
         files={"file": ("notas.txt", b"hola", "text/plain")},
@@ -12,7 +6,7 @@ def test_upload_rejects_non_video():
     assert response.status_code == 415
 
 
-def test_upload_accepts_small_video():
+def test_upload_accepts_small_video(client):
     response = client.post(
         "/uploads",
         files={"file": ("clip.mp4", b"\x00" * 1024, "video/mp4")},
